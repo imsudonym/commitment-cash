@@ -1,0 +1,11 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@bitauth/libauth": "^3.0.0",
+    "@psf/bch-js": "^6.8.0",
+    "bs58": "^6.0.0",
+    "cashscript": "^0.10.5",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.5.0"
+  }
+}

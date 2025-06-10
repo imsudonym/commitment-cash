@@ -1,0 +1,69 @@
+pragma cashscript 0.11.0;
+
+contract SoloCommitment(
+    bytes20 ownerPkh,
+    bytes20 arbiterPkh,
+    int expiration, 
+    int claimAmount) {
+
+    function release(
+        pubkey callerPk, 
+        pubkey arbiterPk,
+        sig callerSig,  
+        sig arbiterSig,
+        int dynamicFee) {
+
+        require(
+            hash160(callerPk) == ownerPkh || hash160(callerPk) == arbiterPkh, 
+            'Caller must be owner or arbiter'
+        );
+        require(checkSig(callerSig, callerPk), 'Invalid caller signature');
+        require(checkSig(arbiterSig, arbiterPk), 'Invalid arbiter signature');
+        // NB: Using tx.locktime is a vulnerability because this value can easily be manipulated 
+        // by the function caller
+        require(tx.locktime < expiration, 'Commitment has expired');
+        require(tx.outputs.length <= 2, 'Cannot have more than 2 outputs');
+        
+        int minerFee = dynamicFee;
+        int currentValue = tx.inputs[this.activeInputIndex].value;
+        int releaseAmount = claimAmount; //+ minerFee;
+        int changeAmount = currentValue - (releaseAmount + minerFee);
+
+        // change is less than released (the change cannot be released next time as 
+        // it cannot cover the release amount + fee)
+        if (changeAmount < releaseAmount) {
+            // add the changeAmount to the releaseAmount
+            releaseAmount = releaseAmount + changeAmount;
+        } else {
+            // change must be sent back to contract
+            bytes changeBytecode = tx.inputs[this.activeInputIndex].lockingBytecode;
+            require(tx.outputs[1].lockingBytecode == changeBytecode, 'Change must be sent back to contract');
+            require(tx.outputs[1].value == changeAmount, 'Incorrect changeValue');
+        }
+
+        bytes25 ownerLock = new LockingBytecodeP2PKH(ownerPkh);
+        bool sendsToOwner = tx.outputs[0].lockingBytecode == ownerLock;
+        require(tx.outputs[0].value == releaseAmount, 'Incorrect release amount');
+        require(sendsToOwner, 'Rewards can only be sent to owner');
+    }
+
+    function cancel(pubkey pk, sig s, int dynamicFee) {
+        require(
+            hash160(pk) == ownerPkh || hash160(pk) == arbiterPkh, 
+            'Caller must be owner or arbiter'
+        );
+        require(checkSig(s, pk), 'Invalid signature');
+        require(tx.locktime < expiration, 'Cannot cancel an expired commitment');
+        require(tx.outputs.length <= 2, 'Cannot have more than 2 outputs');
+
+        int minerFee = dynamicFee;
+        int currentValue = tx.inputs[this.activeInputIndex].value;
+        int refundAmount = currentValue; // i want this only 70% of currentValue
+    }
+
+    function sweep(pubkey pk, sig s) {
+        require(hash160(pk) == arbiterPkh, 'Caller must be arbiter');
+        require(checkSig(s, pk), 'Invalid signature');
+        require(tx.locktime >= expiration, 'Commitment not expired');
+    }
+}
