@@ -23,19 +23,28 @@
       "name": "release",
       "inputs": [
         {
-          "name": "callerPk",
-          "type": "pubkey"
-        },
-        {
           "name": "arbiterPk",
           "type": "pubkey"
         },
         {
-          "name": "callerSig",
+          "name": "arbiterSig",
           "type": "sig"
         },
         {
-          "name": "arbiterSig",
+          "name": "dynamicFee",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "name": "cancel",
+      "inputs": [
+        {
+          "name": "pk",
+          "type": "pubkey"
+        },
+        {
+          "name": "s",
           "type": "sig"
         },
         {
@@ -58,71 +67,106 @@
       ]
     }
   ],
-  "bytecode": "OP_4 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_5 OP_PICK OP_HASH160 OP_OVER OP_EQUAL OP_6 OP_PICK OP_HASH160 OP_3 OP_ROLL OP_EQUAL OP_BOOLOR OP_VERIFY OP_6 OP_ROLL OP_5 OP_ROLL OP_CHECKSIGVERIFY OP_2ROT OP_CHECKSIGVERIFY OP_TXLOCKTIME OP_ROT OP_LESSTHAN OP_VERIFY OP_TXOUTPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_3 OP_ROLL OP_INPUTINDEX OP_UTXOVALUE OP_3 OP_ROLL OP_SWAP OP_OVER OP_3 OP_ROLL OP_ADD OP_SUB OP_2DUP OP_GREATERTHAN OP_IF OP_2DUP OP_ADD OP_ROT OP_DROP OP_SWAP OP_ELSE OP_INPUTINDEX OP_UTXOBYTECODE OP_1 OP_OUTPUTBYTECODE OP_OVER OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_2 OP_PICK OP_NUMEQUALVERIFY OP_DROP OP_ENDIF 76a914 OP_3 OP_ROLL OP_CAT 88ac OP_CAT OP_0 OP_OUTPUTBYTECODE OP_EQUAL OP_0 OP_OUTPUTVALUE OP_3 OP_ROLL OP_NUMEQUALVERIFY OP_NIP OP_NIP OP_ELSE OP_4 OP_ROLL OP_1 OP_NUMEQUALVERIFY OP_4 OP_PICK OP_HASH160 OP_ROT OP_EQUALVERIFY OP_4 OP_ROLL OP_4 OP_ROLL OP_CHECKSIGVERIFY OP_TXLOCKTIME OP_ROT OP_GREATERTHANOREQUAL OP_NIP OP_NIP OP_ENDIF",
-  "source": "pragma cashscript 0.11.0;\n\ncontract SoloCommitment(\n    bytes20 ownerPkh,\n    bytes20 arbiterPkh,\n    int expiration, \n    int claimAmount) {\n\n    function release(\n        pubkey callerPk, \n        pubkey arbiterPk,\n        sig callerSig,  \n        sig arbiterSig,\n        int dynamicFee) {\n\n        require(\n            hash160(callerPk) == ownerPkh || hash160(callerPk) == arbiterPkh, \n            'Caller must be owner or arbiter'\n        );\n        require(checkSig(callerSig, callerPk), 'Invalid caller signature');\n        require(checkSig(arbiterSig, arbiterPk), 'Invalid arbiter signature');\n        // NB: Using tx.locktime is a vulnerability because this value can easily be manipulated \n        // by the function caller\n        require(tx.locktime < expiration, 'Commitment has expired');\n        require(tx.outputs.length <= 2, 'Cannot have more than 2 outputs');\n        \n        int minerFee = dynamicFee;\n        int currentValue = tx.inputs[this.activeInputIndex].value;\n        int releaseAmount = claimAmount; //+ minerFee;\n        int changeAmount = currentValue - (releaseAmount + minerFee);\n\n        // change is less than released (the change cannot be released next time as \n        // it cannot cover the release amount + fee)\n        if (changeAmount < releaseAmount) {\n            // add the changeAmount to the releaseAmount\n            releaseAmount = releaseAmount + changeAmount;\n        } else {\n            // change must be sent back to contract\n            bytes changeBytecode = tx.inputs[this.activeInputIndex].lockingBytecode;\n            require(tx.outputs[1].lockingBytecode == changeBytecode, 'Change must be sent back to contract');\n            require(tx.outputs[1].value == changeAmount, 'Incorrect changeValue');\n        }\n\n        bytes25 ownerLock = new LockingBytecodeP2PKH(ownerPkh);\n        bool sendsToOwner = tx.outputs[0].lockingBytecode == ownerLock;\n        require(tx.outputs[0].value == releaseAmount, 'Incorrect release amount');\n        require(sendsToOwner, 'Rewards can only be sent to owner');\n    }\n\n    function sweep(pubkey pk, sig s) {\n        require(hash160(pk) == arbiterPkh, 'Caller must be arbiter');\n        require(checkSig(s, pk), 'Invalid signature');\n        require(tx.locktime >= expiration, 'Commitment not expired');\n    }\n}",
+  "bytecode": "OP_4 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_5 OP_PICK OP_HASH160 OP_ROT OP_EQUALVERIFY OP_2ROT OP_CHECKSIGVERIFY OP_TXLOCKTIME OP_ROT OP_LESSTHAN OP_VERIFY OP_TXOUTPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_3 OP_ROLL OP_INPUTINDEX OP_UTXOVALUE OP_3 OP_ROLL OP_SWAP OP_OVER OP_3 OP_ROLL OP_ADD OP_SUB OP_2DUP OP_GREATERTHAN OP_IF OP_2DUP OP_ADD OP_ROT OP_DROP OP_SWAP OP_ELSE OP_INPUTINDEX OP_UTXOBYTECODE OP_1 OP_OUTPUTBYTECODE OP_OVER OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_2 OP_PICK OP_NUMEQUALVERIFY OP_DROP OP_ENDIF 76a914 OP_3 OP_ROLL OP_CAT 88ac OP_CAT OP_0 OP_OUTPUTBYTECODE OP_EQUAL OP_0 OP_OUTPUTVALUE OP_3 OP_ROLL OP_NUMEQUALVERIFY OP_NIP OP_NIP OP_ELSE OP_4 OP_PICK OP_1 OP_NUMEQUAL OP_IF OP_5 OP_PICK OP_HASH160 OP_OVER OP_EQUAL OP_6 OP_PICK OP_HASH160 OP_3 OP_PICK OP_EQUAL OP_BOOLOR OP_VERIFY OP_6 OP_ROLL OP_6 OP_ROLL OP_CHECKSIGVERIFY OP_TXLOCKTIME OP_3 OP_ROLL OP_LESSTHAN OP_VERIFY OP_TXOUTPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_4 OP_ROLL OP_INPUTINDEX OP_UTXOVALUE OP_SWAP OP_SUB OP_DUP 46 OP_MUL 64 OP_DIV OP_SWAP OP_OVER OP_SUB OP_0 OP_OUTPUTVALUE OP_ROT OP_NUMEQUALVERIFY OP_1 OP_OUTPUTVALUE OP_NUMEQUALVERIFY 76a914 OP_SWAP OP_CAT 88ac OP_CAT 76a914 OP_ROT OP_CAT 88ac OP_CAT OP_0 OP_OUTPUTBYTECODE OP_ROT OP_EQUAL OP_1 OP_OUTPUTBYTECODE OP_ROT OP_EQUAL OP_SWAP OP_VERIFY OP_NIP OP_NIP OP_ELSE OP_4 OP_ROLL OP_2 OP_NUMEQUALVERIFY OP_4 OP_PICK OP_HASH160 OP_ROT OP_EQUALVERIFY OP_4 OP_ROLL OP_4 OP_ROLL OP_CHECKSIGVERIFY OP_TXLOCKTIME OP_ROT OP_GREATERTHANOREQUAL OP_NIP OP_NIP OP_ENDIF OP_ENDIF",
+  "source": "pragma cashscript 0.11.0;\n\ncontract SoloCommitment(\n    bytes20 ownerPkh,\n    bytes20 arbiterPkh,\n    int expiration, \n    int claimAmount) {\n\n    function release(\n        pubkey arbiterPk,\n        sig arbiterSig,\n        int dynamicFee) {\n\n        require(\n            hash160(arbiterPk) == arbiterPkh, \n            'Caller must be owner or arbiter'\n        );\n\n        require(checkSig(arbiterSig, arbiterPk), 'Invalid signature');\n        require(tx.locktime < expiration, 'Commitment has expired');\n        require(tx.outputs.length <= 2, 'Cannot have more than 2 outputs');\n        \n        int minerFee = dynamicFee;\n        int currentValue = tx.inputs[this.activeInputIndex].value;\n        int releaseAmount = claimAmount; //+ minerFee;\n        int changeAmount = currentValue - (releaseAmount + minerFee);\n\n        // change is less than released (the change cannot be released next time as \n        // it cannot cover the release amount + fee)\n        if (changeAmount < releaseAmount) {\n            // add the changeAmount to the releaseAmount\n            releaseAmount = releaseAmount + changeAmount;\n        } else {\n            // change must be sent back to contract\n            bytes changeBytecode = tx.inputs[this.activeInputIndex].lockingBytecode;\n            require(tx.outputs[1].lockingBytecode == changeBytecode, 'Change must be sent back to contract');\n            require(tx.outputs[1].value == changeAmount, 'Incorrect changeValue');\n        }\n\n        bytes25 ownerLock = new LockingBytecodeP2PKH(ownerPkh);\n        bool sendsToOwner = tx.outputs[0].lockingBytecode == ownerLock;\n        require(tx.outputs[0].value == releaseAmount, 'Incorrect release amount');\n        require(sendsToOwner, 'Rewards can only be sent to owner');\n    }\n\n    function cancel(pubkey pk, sig s, int dynamicFee) {\n        require(\n            hash160(pk) == ownerPkh || hash160(pk) == arbiterPkh, \n            'Caller must be owner or arbiter'\n        );\n        require(checkSig(s, pk), 'Invalid signature');\n        require(tx.locktime < expiration, 'Cannot cancel an expired commitment');\n        require(tx.outputs.length <= 2, 'Cannot have more than 2 outputs');\n\n        int minerFee = dynamicFee;\n        int currentValue = tx.inputs[this.activeInputIndex].value - minerFee;\n        int refundAmount = (currentValue * 70) / 100; // only 70% of balance is refunded\n        int sweepAmount = currentValue - refundAmount;\n\n        require(tx.outputs[0].value == refundAmount, 'Incorrect refundAmount, this value must only be 70% of balance');\n        require(tx.outputs[1].value == sweepAmount, 'Incorrect sweepAmount, this value must only be 30% of balance');\n\n        bytes25 ownerLock = new LockingBytecodeP2PKH(ownerPkh);\n        bytes25 arbiterLock = new LockingBytecodeP2PKH(arbiterPkh);\n        bool sendsToOwner = tx.outputs[0].lockingBytecode == ownerLock;\n        bool sendsToArbiter = tx.outputs[1].lockingBytecode == arbiterLock;\n\n        require(sendsToOwner, 'Refund must send to owner');\n        require(sendsToArbiter, 'Sweep must send to arbiter');\n    }\n\n    function sweep(pubkey pk, sig s) {\n        require(hash160(pk) == arbiterPkh, 'Caller must be arbiter');\n        require(checkSig(s, pk), 'Invalid signature');\n        require(tx.locktime >= expiration, 'Commitment not expired');\n    }\n}",
   "debug": {
-    "bytecode": "5479009c635579a978875679a9537a879b69567a557aad71adc57b9f69c452a169537ac0c6537a7c78537a93946ea0636e937b757c67c0c751cd788851cc52799d75680376a914537a7e0288ac7e00cd8700cc537a9d777767547a519d5479a97b88547a547aadc57ba2777768",
-    "sourceMap": "9:4:48:5;;;;;17:20:17:28;;:12::29:1;:33::41:0;:12:::1;:53::61:0;;:45::62:1;:66::76:0;;:45:::1;:12;16:8:19:10;20:25:20:34:0;;:36::44;;:8::75:1;21:25:21:46:0;:8::78:1;24:16:24:27:0;:30::40;:16:::1;:8::68;25:16:25:33:0;:37::38;:16:::1;:8::75;27:23:27:33:0;;28:37:28:58;:27::65:1;29:28:29:39:0;;30:27:30;:43::56;:59::67;;:43:::1;:27::68;34:12:34:40:0;::::1;:42:37:9:0;36:28:36:56;::::1;:12::57;;;37:15:42:9:0;39:45:39:66;:35::83:1;40:31:40:32:0;:20::49:1;:53::67:0;:12::109:1;41:31:41:32:0;:20::39:1;:43::55:0;;:12::82:1;37:15:42:9;;44:28:44:62:0;:53::61;;:28::62:1;;;45:39:45:40:0;:28::57:1;:::70;46:27:46:28:0;:16::35:1;:39::52:0;;:8::82:1;9:4:48:5;;;50::54::0;;;;51:24:51:26;;:16::27:1;:31::41:0;:8::69:1;52:25:52:26:0;;:28::30;;:8::54:1;53:16:53:27:0;:31::41;:16:::1;50:4:54:5;;3:0:55:1",
+    "bytecode": "5479009c635579a97b8871adc57b9f69c452a169537ac0c6537a7c78537a93946ea0636e937b757c67c0c751cd788851cc52799d75680376a914537a7e0288ac7e00cd8700cc537a9d7777675479519c635579a978875679a95379879b69567a567aadc5537a9f69c452a169547ac0c67c94760146950164967c789400cc7b9d51cc9d0376a9147c7e0288ac7e0376a9147b7e0288ac7e00cd7b8751cd7b877c69777767547a529d5479a97b88547a547aadc57ba277776868",
+    "sourceMap": "9:4:44:5;;;;;15:20:15:29;;:12::30:1;:34::44:0;14:8:17:10:1;19:25:19:46:0;:8::70:1;20:16:20:27:0;:30::40;:16:::1;:8::68;21:16:21:33:0;:37::38;:16:::1;:8::75;23:23:23:33:0;;24:37:24:58;:27::65:1;25:28:25:39:0;;26:27:26;:43::56;:59::67;;:43:::1;:27::68;30:12:30:40:0;::::1;:42:33:9:0;32:28:32:56;::::1;:12::57;;;33:15:38:9:0;35:45:35:66;:35::83:1;36:31:36:32:0;:20::49:1;:53::67:0;:12::109:1;37:31:37:32:0;:20::39:1;:43::55:0;;:12::82:1;33:15:38:9;;40:28:40:62:0;:53::61;;:28::62:1;;;41:39:41:40:0;:28::57:1;:::70;42:27:42:28:0;:16::35:1;:39::52:0;;:8::82:1;9:4:44:5;;;46::70::0;;;;;48:20:48:22;;:12::23:1;:27::35:0;:12:::1;:47::49:0;;:39::50:1;:54::64:0;;:39:::1;:12;47:8:50:10;51:25:51:26:0;;:28::30;;:8::54:1;52:16:52:27:0;:30::40;;:16:::1;:8::81;53:16:53:33:0;:37::38;:16:::1;:8::75;55:23:55:33:0;;56:37:56:58;:27::65:1;:68::76:0;:27:::1;57:28:57:40:0;:43::45;:28:::1;:49::52:0;:27:::1;58:26:58:38:0;:41::53;:26:::1;60:27:60:28:0;:16::35:1;:39::51:0;:8::119:1;61:27:61:28:0;:16::35:1;:8::117;63:28:63:62:0;:53::61;:28::62:1;;;64:30:64:66:0;:55::65;:30::66:1;;;65:39:65:40:0;:28::57:1;:61::70:0;:28:::1;66:41:66:42:0;:30::59:1;:63::74:0;:30:::1;68:16:68:28:0;:8::59:1;46:4:70:5;;;72::76::0;;;;73:24:73:26;;:16::27:1;:31::41:0;:8::69:1;74:25:74:26:0;;:28::30;;:8::54:1;75:16:75:27:0;:31::41;:16:::1;72:4:76:5;;3:0:77:1;",
     "logs": [],
     "requires": [
       {
-        "ip": 21,
-        "line": 16,
+        "ip": 13,
+        "line": 14,
         "message": "Caller must be owner or arbiter"
       },
       {
-        "ip": 26,
-        "line": 20,
-        "message": "Invalid caller signature"
-      },
-      {
-        "ip": 28,
-        "line": 21,
-        "message": "Invalid arbiter signature"
-      },
-      {
-        "ip": 32,
-        "line": 24,
-        "message": "Commitment has expired"
-      },
-      {
-        "ip": 36,
-        "line": 25,
-        "message": "Cannot have more than 2 outputs"
-      },
-      {
-        "ip": 63,
-        "line": 40,
-        "message": "Change must be sent back to contract"
-      },
-      {
-        "ip": 68,
-        "line": 41,
-        "message": "Incorrect changeValue"
-      },
-      {
-        "ip": 84,
-        "line": 46,
-        "message": "Incorrect release amount"
-      },
-      {
-        "ip": 85,
-        "line": 47,
-        "message": "Rewards can only be sent to owner"
-      },
-      {
-        "ip": 96,
-        "line": 51,
-        "message": "Caller must be arbiter"
-      },
-      {
-        "ip": 101,
-        "line": 52,
+        "ip": 15,
+        "line": 19,
         "message": "Invalid signature"
       },
       {
-        "ip": 105,
+        "ip": 19,
+        "line": 20,
+        "message": "Commitment has expired"
+      },
+      {
+        "ip": 23,
+        "line": 21,
+        "message": "Cannot have more than 2 outputs"
+      },
+      {
+        "ip": 50,
+        "line": 36,
+        "message": "Change must be sent back to contract"
+      },
+      {
+        "ip": 55,
+        "line": 37,
+        "message": "Incorrect changeValue"
+      },
+      {
+        "ip": 71,
+        "line": 42,
+        "message": "Incorrect release amount"
+      },
+      {
+        "ip": 72,
+        "line": 43,
+        "message": "Rewards can only be sent to owner"
+      },
+      {
+        "ip": 92,
+        "line": 47,
+        "message": "Caller must be owner or arbiter"
+      },
+      {
+        "ip": 97,
+        "line": 51,
+        "message": "Invalid signature"
+      },
+      {
+        "ip": 102,
+        "line": 52,
+        "message": "Cannot cancel an expired commitment"
+      },
+      {
+        "ip": 106,
         "line": 53,
+        "message": "Cannot have more than 2 outputs"
+      },
+      {
+        "ip": 124,
+        "line": 60,
+        "message": "Incorrect refundAmount, this value must only be 70% of balance"
+      },
+      {
+        "ip": 127,
+        "line": 61,
+        "message": "Incorrect sweepAmount, this value must only be 30% of balance"
+      },
+      {
+        "ip": 147,
+        "line": 68,
+        "message": "Refund must send to owner"
+      },
+      {
+        "ip": 148,
+        "line": 69,
+        "message": "Sweep must send to arbiter"
+      },
+      {
+        "ip": 159,
+        "line": 73,
+        "message": "Caller must be arbiter"
+      },
+      {
+        "ip": 164,
+        "line": 74,
+        "message": "Invalid signature"
+      },
+      {
+        "ip": 168,
+        "line": 75,
         "message": "Commitment not expired"
       }
     ]
@@ -131,5 +175,5 @@
     "name": "cashc",
     "version": "0.11.0-next.4"
   },
-  "updatedAt": "2025-06-10T08:13:45.478Z"
+  "updatedAt": "2025-06-11T04:42:01.773Z"
 }

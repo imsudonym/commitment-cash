@@ -4,8 +4,7 @@ import base58 from 'bs58'
 import {
   ripemd160,
   binToHex,
-  hexToBin,
-  decodePrivateKeyWif
+  hexToBin
 } from "@bitauth/libauth"
 
 const bchjs = new BCHJS()
@@ -26,13 +25,6 @@ export function pkHashToCashAddr(pkHash='', isChipnet=false) {
   )
   if (!isChipnet) return address
   return convertCashAddress(address, true, false)
-}
-
-export function wifToPrivKey (wif) {
-    const decoded = decodePrivateKeyWif(wif);
-    const privateKey = decoded.privateKey;
-    console.log('32-byte private key (hex):', Buffer.from(privateKey).toString('hex'));
-    return privateKey
 }
 
 export function hash160ToLegacyAddress(hash160=Buffer.from([])) {

@@ -7,20 +7,16 @@ contract SoloCommitment(
     int claimAmount) {
 
     function release(
-        pubkey callerPk, 
         pubkey arbiterPk,
-        sig callerSig,  
         sig arbiterSig,
         int dynamicFee) {
 
         require(
-            hash160(callerPk) == ownerPkh || hash160(callerPk) == arbiterPkh, 
+            hash160(arbiterPk) == arbiterPkh, 
             'Caller must be owner or arbiter'
         );
-        require(checkSig(callerSig, callerPk), 'Invalid caller signature');
-        require(checkSig(arbiterSig, arbiterPk), 'Invalid arbiter signature');
-        // NB: Using tx.locktime is a vulnerability because this value can easily be manipulated 
-        // by the function caller
+
+        require(checkSig(arbiterSig, arbiterPk), 'Invalid signature');
         require(tx.locktime < expiration, 'Commitment has expired');
         require(tx.outputs.length <= 2, 'Cannot have more than 2 outputs');
         
@@ -57,8 +53,20 @@ contract SoloCommitment(
         require(tx.outputs.length <= 2, 'Cannot have more than 2 outputs');
 
         int minerFee = dynamicFee;
-        int currentValue = tx.inputs[this.activeInputIndex].value;
-        int refundAmount = currentValue; // i want this only 70% of currentValue
+        int currentValue = tx.inputs[this.activeInputIndex].value - minerFee;
+        int refundAmount = (currentValue * 70) / 100; // only 70% of balance is refunded
+        int sweepAmount = currentValue - refundAmount;
+
+        require(tx.outputs[0].value == refundAmount, 'Incorrect refundAmount, this value must only be 70% of balance');
+        require(tx.outputs[1].value == sweepAmount, 'Incorrect sweepAmount, this value must only be 30% of balance');
+
+        bytes25 ownerLock = new LockingBytecodeP2PKH(ownerPkh);
+        bytes25 arbiterLock = new LockingBytecodeP2PKH(arbiterPkh);
+        bool sendsToOwner = tx.outputs[0].lockingBytecode == ownerLock;
+        bool sendsToArbiter = tx.outputs[1].lockingBytecode == arbiterLock;
+
+        require(sendsToOwner, 'Refund must send to owner');
+        require(sendsToArbiter, 'Sweep must send to arbiter');
     }
 
     function sweep(pubkey pk, sig s) {

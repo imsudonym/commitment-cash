@@ -81,4 +81,9 @@ async function run () {
         console.log('-------- sweeping unclaimed funds --------')
         commitment.sweep(ARBITER_WIF)
     }
+
+    if (ACTION == 'cancel') {
+        console.log('-------- cancelling commitment --------')
+        commitment.cancel(OWNER_WIF)
+    }
 }

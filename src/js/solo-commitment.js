@@ -1,7 +1,7 @@
 import { ElectrumNetworkProvider, Contract, SignatureTemplate } from 'cashscript';
 import { binToHex } from '@bitauth/libauth';
 import { defaultNetwork, P2PKH_DUST, TX_FEE } from './constants.js';
-import { pkHashToCashAddr, pubkeyToPkHash, wifToPrivKey } from './utils.js';
+import { pkHashToCashAddr, pubkeyToPkHash } from './utils.js';
 
 import { readFile } from 'fs/promises';
 const raw = await readFile(new URL('../contracts/solo-commitment-artifact.json', import.meta.url), 'utf-8');
@@ -55,7 +55,7 @@ export class Commitment {
         return contract
     }
 
-    async release (callerWif, arbiterWif) {
+    async release (arbiterWif) {
         const contract = this.getContract()
         const balance = BigInt(await contract.getBalance())
 
@@ -64,15 +64,12 @@ export class Commitment {
             return 
         }
 
-        const callerSig = new SignatureTemplate(callerWif)
-        const callerPubkey = binToHex(callerSig.getPublicKey())
-        const callerPkHash = pubkeyToPkHash(callerPubkey)
-
         const arbiterSig = new SignatureTemplate(arbiterWif)
         const arbiterPubkey = binToHex(arbiterSig.getPublicKey())
+        const arbiterPkHash = pubkeyToPkHash(arbiterPubkey)
 
-        if (callerPkHash != this.params.ownerPkHash && callerPkHash != this.params.arbiterPkHash) {
-            throw new Error ('Private key must be from owner or arbiter')
+        if (arbiterPkHash != this.params.arbiterPkHash) {
+            throw new Error ('Private key must be from arbiter')
         }
 
         const txFee = BigInt(this.fundingAmounts.txFee)
@@ -99,7 +96,49 @@ export class Commitment {
         console.log('outputs:', outputs)
 
         const result = await contract.functions
-            .release(callerPubkey, arbiterPubkey, callerSig, arbiterSig, BigInt(txFee))
+            .release(arbiterPubkey, arbiterSig, BigInt(txFee))
+            .to(outputs)
+            .withHardcodedFee(BigInt(txFee))
+            .send()
+        
+        console.log('result:', result)
+    }
+
+    async cancel (callerWif) {
+        const contract = this.getContract()
+        const balance = BigInt(await contract.getBalance())
+
+        if (balance == 0) {
+            console.log('Contract balance is 0')
+            return 
+        }
+
+        const callerSig = new SignatureTemplate(callerWif)
+        const callerPubkey = binToHex(callerSig.getPublicKey())
+        const callerPkHash = pubkeyToPkHash(callerPubkey)
+
+         if (callerPkHash != this.params.ownerPkHash && callerPkHash != this.params.arbiterPkHash) {
+            throw new Error ('Private key must be from owner or arbiter')
+        }
+
+        const txFee = BigInt(this.fundingAmounts.txFee)
+        const remainingFunds = balance - txFee
+        const refundAmount = (remainingFunds * 70n) / 100n
+        const sweepAmount = remainingFunds - refundAmount
+
+        console.log('balance:', balance)
+        console.log('refundAmount:', refundAmount)
+        console.log('sweepAmount:', sweepAmount)
+
+        const outputs = [
+            {to: pkHashToCashAddr(this.params.ownerPkHash), amount: refundAmount},
+            {to: pkHashToCashAddr(this.params.arbiterPkHash), amount: sweepAmount},
+        ]
+        
+        console.log('outputs:', outputs)
+
+        const result = await contract.functions
+            .cancel(callerPubkey, callerSig, BigInt(txFee))
             .to(outputs)
             .withHardcodedFee(BigInt(txFee))
             .send()
