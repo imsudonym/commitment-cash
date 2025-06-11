@@ -1,11 +1,28 @@
 pragma cashscript 0.11.0;
 
+/**
+ * @title SoloCommitment
+ * @notice Trust-minimized, time-locked BCH contract between an owner and an arbiter.
+ * @param ownerPkh    P2PKH hash of the owner's public key
+ * @param arbiterPkh  P2PKH hash of the arbiter's public key
+ * @param expiration  Block height or timestamp when contract expires
+ * @param claimAmount Amount (in satoshis) to be claimed by the owner
+ */
 contract SoloCommitment(
     bytes20 ownerPkh,
     bytes20 arbiterPkh,
     int expiration, 
     int claimAmount) {
 
+    /**
+     * @notice Allows the arbiter to release funds to the owner before expiration.
+     * @param arbiterPk    Arbiter's public key
+     * @param arbiterSig   Arbiter's signature
+     * @param dynamicFee   Miner fee for the transaction
+     * Requirements:
+     *  - Only callable by arbiter (signature required)
+     *  - Fails if expired or invalid outputs
+     */
     function release(
         pubkey arbiterPk,
         sig arbiterSig,
@@ -22,7 +39,7 @@ contract SoloCommitment(
         
         int minerFee = dynamicFee;
         int currentValue = tx.inputs[this.activeInputIndex].value;
-        int releaseAmount = claimAmount; //+ minerFee;
+        int releaseAmount = claimAmount; 
         int changeAmount = currentValue - (releaseAmount + minerFee);
 
         // change is less than released (the change cannot be released next time as 
@@ -43,6 +60,16 @@ contract SoloCommitment(
         require(sendsToOwner, 'Rewards can only be sent to owner');
     }
 
+    /**
+     * @notice Allows owner or arbiter to cancel before expiration.
+     * @param pk        Caller public key (owner or arbiter)
+     * @param s         Caller signature
+     * @param dynamicFee Miner fee for the transaction
+     * Requirements:
+     *  - Refunds 70% to owner, 30% to arbiter
+     *  - Only callable by owner or arbiter (signature required)
+     *  - Fails if expired or invalid outputs
+     */
     function cancel(pubkey pk, sig s, int dynamicFee) {
         require(
             hash160(pk) == ownerPkh || hash160(pk) == arbiterPkh, 
@@ -69,6 +96,14 @@ contract SoloCommitment(
         require(sendsToArbiter, 'Sweep must send to arbiter');
     }
 
+    /**
+     * @notice Allows arbiter to sweep all funds after expiration.
+     * @param pk Arbiter's public key
+     * @param s  Arbiter's signature
+     * Requirements:
+     *  - Only callable by arbiter (signature required)
+     *  - Fails if not expired
+     */
     function sweep(pubkey pk, sig s) {
         require(hash160(pk) == arbiterPkh, 'Caller must be arbiter');
         require(checkSig(s, pk), 'Invalid signature');
