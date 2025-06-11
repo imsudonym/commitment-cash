@@ -1,6 +1,6 @@
-# Catalyst: Solo Commitment Smart Contract for Bitcoin Cash
+# Commitment Smart Contract for Bitcoin Cash
 
-Catalyst is a Node.js project implementing a Bitcoin Cash (BCH) smart contract using [CashScript](https://cashscript.org/). It enables a trust-minimized, time-locked commitment between an owner and an arbiter, supporting conditional fund release, cancellation, and sweep operations.
+A Node.js project implementing a Bitcoin Cash (BCH) smart contract using [CashScript](https://cashscript.org/). It enables a trust-minimized, time-locked commitment between an owner and an arbiter, supporting conditional fund release, cancellation, and sweep operations.
 
 ## Features
 - **SoloCommitment Contract**: Written in CashScript, compiled to Bitcoin Cash bytecode.
